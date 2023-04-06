@@ -21,7 +21,7 @@ async def root():
 
 @app.post("/parse/")
 async def detect_upload_file(
-    pdf_file: UploadFile = File(...), relative_coordinates: bool = False
+    pdf_file: UploadFile = File(...), relative_coordinates: bool = True
 ):
 
     with tempfile.TemporaryDirectory() as tempdir:
@@ -31,6 +31,7 @@ async def detect_upload_file(
 
         layout_csv = pipeline(
             input_pdf=Path(f"{tempdir}/tmp.pdf"),
+            output_path=Path("output"),
             return_csv=True,
             pdf_extractor=pdf_extractor,
             vision_model1=vision_model1,
@@ -45,7 +46,7 @@ async def detect_upload_file(
 
 
 @app.get("/parse/")
-async def detect_url(pdf_url: str, relative_coordinates: bool = False):
+async def detect_url(pdf_url: str, relative_coordinates: bool = True):
 
     # Refer to https://stackoverflow.com/questions/35388332/how-to-download-images-with-aiohttp
     with tempfile.TemporaryDirectory() as tempdir:
@@ -58,6 +59,7 @@ async def detect_url(pdf_url: str, relative_coordinates: bool = False):
 
         layout_csv = pipeline(
             input_pdf=Path(f"{tempdir}/tmp.pdf"),
+            output_path=Path("output"),
             return_csv=True,
             pdf_extractor=pdf_extractor,
             vision_model1=vision_model1,

@@ -51,6 +51,8 @@ def aggregate_consecutive_group_intervals(gp):
         }
     )
 
+def nearly_eq(x, y):
+    return abs(x - y) < 2.0
 
 def union(block1, block2):
     x11, y11, x12, y12 = block1.coordinates
@@ -62,7 +64,7 @@ def union(block1, block2):
             block,
             id=block1.id,
             type=block1.type,
-            text=block1.text + " " + block2.text,
+            text=block1.text + (" " if nearly_eq(y12, y22) else "\n") + block2.text,
             parent=block1.parent,
             next=block1.next,
         )
@@ -177,21 +179,25 @@ def pipeline(
 
     all_preds = []
     for idx, page_token in enumerate(page_tokens):
-        predicted_types = pdf_predictor.predict_page(page_token, return_type="list")
+        try:
+            predicted_types = pdf_predictor.predict_page(page_token, return_type="list")
 
-        for (start, end, _) in convert_sequence_tagging_to_spans(
-            page_token.tokens, lambda ele: ele.line_id
-        ):
-            unique_preds = Counter(predicted_types[start:end])
+            for (start, end, _) in convert_sequence_tagging_to_spans(
+                page_token.tokens, lambda ele: ele.line_id
+            ):
+                unique_preds = Counter(predicted_types[start:end])
 
-            # Per line majority voting
-            if len(unique_preds) > 1:
-                # print(predicted_types[start:end])
-                _type = unique_preds.most_common()[0][0]
-            else:
-                _type = predicted_types[start]
+                # Per line majority voting
+                if len(unique_preds) > 1:
+                    # print(predicted_types[start:end])
+                    _type = unique_preds.most_common()[0][0]
+                else:
+                    _type = predicted_types[start]
 
-            all_preds.append([idx, _type, start, end])
+                all_preds.append([idx, _type, start, end])
+        except Exception as e:
+            print(e)
+            print(f"Error in page {idx}, perhaps it's blank")
 
     df = pd.DataFrame(all_preds, columns=["page", "type", "start", "end"])
     df = (
@@ -277,10 +283,10 @@ def pipeline(
             # print(cur_page.tokens[slice(*interval)].get_texts())
             # print([cur_page.tokens[idx].font for idx in interval])
             # print(Counter([cur_page.tokens[idx].font for idx in interval]).most_common()[0][0])
+
+            break
             section_header_fonts = [
-                Counter([cur_page.tokens[idx].font for idx in interval]).most_common()[
-                    0
-                ][0]
+                Counter([cur_page.tokens[idx].font for idx in interval]).most_common()[0][0]
                 for interval in page_section["intervals"]
             ]
 
@@ -411,9 +417,6 @@ def pipeline(
             tmp.loc[idx, "y1"] /= cur_page_h
             tmp.loc[idx, "y2"] /= cur_page_h
 
-    if return_csv:
-        return tmp.drop(columns=["index", "intervals"])
-
     save_path = output_path / input_pdf.stem
     os.makedirs(save_path, exist_ok=True)
 
@@ -432,6 +435,9 @@ def pipeline(
             )
             figure_screenshot = Image.fromarray(figure_screenshot)
             figure_screenshot.save(save_path / f"figures/{pid:02d}-{block.id:02d}.png")
+
+    if return_csv:
+        return tmp.drop(columns=["index", "intervals"])
 
 
 def build_predictors():
